@@ -1,17 +1,21 @@
 # import libraries
+import os
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend for CI environments
 import matplotlib.pyplot as plt
 import seaborn as sns
 import itertools
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix, precision_score, f1_score, recall_score
 sns.set(style='white')
 
-# Load Data
-dataset = pd.read_csv('C:\Users\akhil gunti\AGENTIC_AI\CICD\cicdpipeline-main\iris.csv')
+# Load Data — use a relative path so this works in any environment (CI/CD, local, etc.)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+dataset = pd.read_csv(os.path.join(BASE_DIR, 'iris.csv'))
 
 # Feature names (Ensure no extra spaces or parentheses)
 dataset.columns = [colname.strip(' (cm)').replace(
@@ -19,12 +23,10 @@ dataset.columns = [colname.strip(' (cm)').replace(
 features_names = dataset.columns.tolist()[:4]
 
 # Feature Engineering
-dataset['sepal_length_width_ratio'] = dataset['sepal_length'] / \
-    dataset['sepal_width']
-dataset['petal_length_width_ratio'] = dataset['petal_length'] / \
-    dataset['petal_width']
+dataset['sepal_length_width_ratio'] = dataset['sepal_length'] /     dataset['sepal_width']
+dataset['petal_length_width_ratio'] = dataset['petal_length'] /     dataset['petal_width']
 
-# Select Features (Correct the duplicate column issue)
+# Select Features
 dataset = dataset[['sepal_length', 'sepal_width', 'petal_length', 'petal_width',
                    'sepal_length_width_ratio', 'petal_length_width_ratio', 'target']]
 
@@ -53,25 +55,20 @@ recall_lr = recall_score(y_test, predictions_lr, average='micro')
 train_acc_lr = logreg.score(X_train, y_train) * 100
 test_acc_lr = logreg.score(X_test, y_test) * 100
 
-# Random Forest
-rf_reg = RandomForestRegressor()
-rf_reg.fit(X_train, y_train)
-predictions_rf = rf_reg.predict(X_test)
+# Random Forest Classifier (classification task, not regression)
+rf_clf = RandomForestClassifier(n_estimators=100, random_state=44)
+rf_clf.fit(X_train, y_train)
+predictions_rf = rf_clf.predict(X_test)
 
-# Convert predictions to class labels
-predictions_rf_class = np.round(predictions_rf).astype(int)
-
-f1_rf = f1_score(y_test, predictions_rf_class, average='micro')
-prec_rf = precision_score(y_test, predictions_rf_class, average='micro')
-recall_rf = recall_score(y_test, predictions_rf_class, average='micro')
+f1_rf = f1_score(y_test, predictions_rf, average='micro')
+prec_rf = precision_score(y_test, predictions_rf, average='micro')
+recall_rf = recall_score(y_test, predictions_rf, average='micro')
 
 # Accuracy
-train_acc_rf = rf_reg.score(X_train, y_train) * 100
-test_acc_rf = rf_reg.score(X_test, y_test) * 100
+train_acc_rf = rf_clf.score(X_train, y_train) * 100
+test_acc_rf = rf_clf.score(X_test, y_test) * 100
 
 # Confusion Matrix Plotting Function
-
-
 def plot_cm(cm, target_name, title="Confusion Matrix", cmap=None, normalize=True):
     accuracy = np.trace(cm) / float(np.sum(cm))
     misclass = 1 - accuracy
@@ -103,18 +100,17 @@ def plot_cm(cm, target_name, title="Confusion Matrix", cmap=None, normalize=True
     plt.xlabel('Predicted Label\naccuracy={:0.4f}; misclass={:0.4f}'.format(
         accuracy, misclass))
     plt.savefig('ConfusionMatrix.png', dpi=120)
-    plt.show()
-
+    plt.close()
 
 target_name = np.array(['setosa', 'versicolor', 'virginica'])
 plot_cm(cm_lr, target_name, title="Confusion Matrix (Logistic Regression)",
         cmap=None, normalize=True)
 
 # Feature Importance Plotting
-importances = rf_reg.feature_importances_
+importances = rf_clf.feature_importances_
 labels = dataset.columns[:-1]  # Exclude 'target' column for features
 feature_df = pd.DataFrame(list(zip(labels, importances)), columns=[
-                          'feature', 'importance'])
+    'feature', 'importance'])
 features = feature_df.sort_values(by='importance', ascending=False)
 
 # Create feature importance plot
@@ -124,25 +120,26 @@ ax.set_xlabel('Importance', fontsize=14)
 ax.set_ylabel('Feature', fontsize=14)
 ax.set_title('Random Forest Feature Importances', fontsize=12)
 
-# Show the feature importance plot
-plt.tight_layout()  # Make sure layout is adjusted
-plt.show()  # This ensures the plot will be shown on the screen
-
 # Save the feature importance plot as a PNG image
+plt.tight_layout()
 plt.savefig('FeatureImportance.png')
+plt.close()
 
 # Saving Scores to a File
-with open('scores.txt', "w") as score:
-    score.write("Random Forest Train Var: %2.1f%%\n" % train_acc_rf)
-    score.write("Random Forest Test Var: %2.1f%%\n" % test_acc_rf)
+with open('scores.txt', 'w') as score:
+    score.write("Random Forest Train Acc: %2.1f%%\n" % train_acc_rf)
+    score.write("Random Forest Test Acc: %2.1f%%\n" % test_acc_rf)
     score.write("F1 Score: %2.1f%%\n" % f1_rf)
     score.write("Recall Score: %2.1f%%\n" % recall_rf)
     score.write("Precision Score: %2.1f%%\n" % prec_rf)
 
     score.write("\n\n")
 
-    score.write("Logistic Regression Train Var: %2.1f%%\n" % train_acc_lr)
-    score.write("Logistic Regression Test Var: %2.1f%%\n" % test_acc_lr)
+    score.write("Logistic Regression Train Acc: %2.1f%%\n" % train_acc_lr)
+    score.write("Logistic Regression Test Acc: %2.1f%%\n" % test_acc_lr)
     score.write("F1 Score: %2.1f%%\n" % f1_lr)
     score.write("Recall Score: %2.1f%%\n" % recall_lr)
     score.write("Precision Score: %2.1f%%\n" % prec_lr)
+
+print("Training complete. Scores saved to scores.txt")
+print("Plots saved: ConfusionMatrix.png, FeatureImportance.png")
